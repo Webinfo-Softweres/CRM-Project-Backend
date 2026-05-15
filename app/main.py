@@ -24,8 +24,8 @@ app.include_router(api_router, prefix="/api/v1")
 
 
 @app.on_event("startup")
-def startup_event():
-    Base.metadata.create_all(bind=engine)
+async def startup_event():
+    pass
 
 
 @app.get("/")
