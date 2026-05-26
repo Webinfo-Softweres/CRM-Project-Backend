@@ -110,3 +110,30 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
             "created_at": db_user.created_at
         }
     }
+
+
+
+
+@router.post("/logout")
+def logout(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+
+    try:
+
+        return {
+
+            "status": "success",
+
+            "message": "Logout successful"
+        }
+
+    except Exception as e:
+
+        raise HTTPException(
+
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+
+            detail=str(e)
+        )

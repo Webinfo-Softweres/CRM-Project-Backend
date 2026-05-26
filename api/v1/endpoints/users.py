@@ -5,29 +5,128 @@ from db.session import get_db
 from models.user import User
 from schemas.user import User as UserSchema, UserCreate, UserUpdate
 from core.security import get_password_hash, get_current_active_user, is_admin
+from zk import ZK
 
 router = APIRouter()
 
 
-@router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate, current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.email == user.email).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+# @router.post("/", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
+# def create_user(user: UserCreate, current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
+#     db_user = db.query(User).filter(User.email == user.email).first()
+#     if db_user:
+#         raise HTTPException(status_code=400, detail="Email already registered")
     
-    hashed_password = get_password_hash(user.password)
+#     hashed_password = get_password_hash(user.password)
+#     db_user = User(
+#         name=user.name,
+#         email=user.email,
+#         phone=user.phone,
+#         password=hashed_password,
+#         role_id=user.role_id,
+#         department_id=user.department_id,
+#         status=user.status
+#     )
+#     db.add(db_user)
+#     db.commit()
+#     db.refresh(db_user)
+#     return db_user.
+
+
+DEVICE_IP = "192.168.1.201"
+DEVICE_PORT = 4370
+
+
+@router.post("/",response_model=UserSchema,status_code=status.HTTP_201_CREATED)
+def create_user(user: UserCreate,db: Session = Depends(get_db)):
+
+
+    existing_email = db.query(User).filter(
+        User.email == user.email
+    ).first()
+
+    if existing_email:
+
+        raise HTTPException(
+            status_code=400,
+            detail="Email already registered",
+        )
+
+
+    existing_phone = db.query(User).filter(
+        User.phone == user.phone
+    ).first()
+
+    if existing_phone:
+        raise HTTPException(
+            status_code=400,
+            detail="Phone already registered",
+        )
+
+
+    last_user = db.query(User).order_by(
+        User.id.desc()
+    ).first()
+
+    if last_user:
+        biometric_number = last_user.id + 1000
+
+    else:
+        biometric_number = 1001
+
+    biometric_id = f"ZY{biometric_number}"
+
+
+    hashed_password = get_password_hash(
+        user.password
+    )
+
+
     db_user = User(
+
         name=user.name,
         email=user.email,
         phone=user.phone,
         password=hashed_password,
         role_id=user.role_id,
         department_id=user.department_id,
-        status=user.status
+        biometric_id=biometric_id,
     )
+
     db.add(db_user)
+
     db.commit()
+
     db.refresh(db_user)
+
+    try:
+
+        zk = ZK(
+            DEVICE_IP,
+            port=DEVICE_PORT,
+            timeout=10,
+        )
+
+        conn = zk.connect()
+
+        conn.set_user(
+            uid=db_user.id,
+            name=db_user.name,
+            password="",
+            group_id="",
+            user_id=str(
+                db_user.biometric_id
+            ),
+        )
+
+        conn.disconnect()
+
+    except Exception as e:
+
+        print(
+            "Biometric Sync Failed:",
+            str(e)
+        )
+
     return db_user
 
 
