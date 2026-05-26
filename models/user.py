@@ -19,7 +19,7 @@ class User(BaseModel):
     role_id = Column(Integer, ForeignKey("roles.id"))
     department_id = Column(Integer, ForeignKey("departments.id"))
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVE)
-    
+    biometric_id = Column(String(50), nullable=True)
     role = relationship("Role", back_populates="users")
     department = relationship("Department", back_populates="users")
 

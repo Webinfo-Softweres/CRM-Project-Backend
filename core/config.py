@@ -17,6 +17,12 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    BIOMETRIC_DEVICE_IP: str
+
+    BIOMETRIC_DEVICE_PORT: int = 4370
+
+
+
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",
