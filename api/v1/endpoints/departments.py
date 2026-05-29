@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
 from typing import List
 from db.session import get_db
 from models.user import Department
 from schemas.user import Department as DepartmentSchema, DepartmentCreate
 from core.security import get_current_active_user, is_admin
+from sqlalchemy import or_
+
 
 router = APIRouter()
 
@@ -22,11 +24,39 @@ def create_department(department: DepartmentCreate, current_user: Department = D
     return db_dept
 
 
-@router.get("/", response_model=List[DepartmentSchema])
-def get_departments(skip: int = 0, limit: int = 100, current_user: Department = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    departments = db.query(Department).offset(skip).limit(limit).all()
-    return departments
+# @router.get("/", response_model=List[DepartmentSchema])
+# def get_departments(skip: int = 0, limit: int = 100, current_user: Department = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     departments = db.query(Department).offset(skip).limit(limit).all()
+#     return departments
 
+@router.get("/", response_model=List[DepartmentSchema])
+def get_departments(
+    skip: int = 0,
+    limit: int = 100,
+    search: str = Query(None, description="Search by department name or description"),
+    current_user: Department = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Department)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Department.name.ilike(f"%{search}%"),
+                Department.description.ilike(f"%{search}%")
+            )
+        )
+
+    departments = (
+        query
+        .order_by(Department.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return departments
 
 @router.get("/{dept_id}", response_model=DepartmentSchema)
 def get_department(dept_id: int, current_user: Department = Depends(get_current_active_user), db: Session = Depends(get_db)):

@@ -87,3 +87,18 @@ class TokenData(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    role_id: int
+    department_id: int
+    biometric_id: str | None
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True

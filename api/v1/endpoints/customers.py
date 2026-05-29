@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
+
 from typing import List, Dict, Any
 from db.session import get_db
 from models.customer import Customer
@@ -26,16 +28,76 @@ def create_customer(customer: CustomerCreate, current_user: User = Depends(get_c
     return db_customer
 
 
-@router.get("/")
+# @router.get("")
+# def get_customers(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     customers = db.query(Customer).offset(skip).limit(limit).all()
+#     total = db.query(Customer).count()
+#     return {
+#         "items": customers,
+#         "page": (skip // limit) + 1,
+#         "limit": limit,
+#         "total": total
+#     }
+
 @router.get("")
-def get_customers(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    customers = db.query(Customer).offset(skip).limit(limit).all()
-    total = db.query(Customer).count()
+def get_customers(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(
+        None,
+        description="Search by name, company name, email, phone, or address"
+    ),
+
+    # Filters
+    company_name: str = None,
+    email: str = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Customer)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Customer.name.ilike(f"%{search}%"),
+                Customer.company_name.ilike(f"%{search}%"),
+                Customer.email.ilike(f"%{search}%"),
+                Customer.phone.ilike(f"%{search}%"),
+                Customer.address.ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if company_name:
+        query = query.filter(
+            Customer.company_name.ilike(f"%{company_name}%")
+        )
+
+    if email:
+        query = query.filter(
+            Customer.email.ilike(f"%{email}%")
+        )
+
+    total = query.count()
+
+    customers = (
+        query
+        .order_by(Customer.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": customers,
-        "page": (skip // limit) + 1,
+        "page": (skip // limit) + 1 if limit else 1,
         "limit": limit,
-        "total": total
+        "total": total,
+        "pages": (total + limit - 1) // limit if limit else 1
     }
 
 

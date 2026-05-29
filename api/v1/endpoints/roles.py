@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
 from typing import List
 from db.session import get_db
 from models.user import Role
 from schemas.user import Role as RoleSchema, RoleCreate
 from core.security import get_current_active_user, is_admin
+from sqlalchemy import or_
+
 
 router = APIRouter()
 
@@ -26,11 +28,40 @@ def create_role(role: RoleCreate, current_user: Role = Depends(is_admin), db: Se
     return db_role
 
 
-@router.get("/", response_model=List[RoleSchema])
-def get_roles(skip: int = 0, limit: int = 100, current_user: Role = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    roles = db.query(Role).offset(skip).limit(limit).all()
-    return roles
+# @router.get("/", response_model=List[RoleSchema])
+# def get_roles(skip: int = 0, limit: int = 100, current_user: Role = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     roles = db.query(Role).offset(skip).limit(limit).all()
+#     return roles
 
+
+@router.get("/", response_model=List[RoleSchema])
+def get_roles(
+    skip: int = 0,
+    limit: int = 100,
+    search: str = Query(None, description="Search by role name or description"),
+    current_user: Role = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Role)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Role.role_name.ilike(f"%{search}%"),
+                Role.description.ilike(f"%{search}%")
+            )
+        )
+
+    roles = (
+        query
+        .order_by(Role.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return roles
 
 @router.get("/{role_id}", response_model=RoleSchema)
 def get_role(role_id: int, current_user: Role = Depends(get_current_active_user), db: Session = Depends(get_db)):
