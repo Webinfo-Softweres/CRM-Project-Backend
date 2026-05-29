@@ -25,7 +25,7 @@ jobs:
 
           script: |
 
-            cd ~/CRM-Project-Backend
+            cd /home/ubuntu/backup/CRM-Project-Backend
 
             git pull origin main
 
@@ -33,4 +33,6 @@ jobs:
 
             pip install -r requirements.txt
 
-            sudo systemctl restart crm
+            sudo systemctl restart crm-backup.service
+
+            sudo systemctl status crm-backup.service --no-pager
