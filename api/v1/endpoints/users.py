@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
 from typing import List
 from db.session import get_db
 from models.user import User
-from schemas.user import User as UserSchema, UserCreate, UserUpdate
+from schemas.user import User as UserSchema, UserCreate, UserUpdate,UserResponse
 from core.security import get_password_hash, get_current_active_user, is_admin
 from zk import ZK
+from sqlalchemy import or_
+
 
 router = APIRouter()
 
@@ -130,10 +132,68 @@ def create_user(user: UserCreate,db: Session = Depends(get_db)):
     return db_user
 
 
+# @router.get("/")
+# def get_users(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     total = db.query(User).count()
+#     users = db.query(User).offset(skip).limit(limit).all()
+#     return {
+#         "items": users,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
 @router.get("/")
-def get_users(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    total = db.query(User).count()
-    users = db.query(User).offset(skip).limit(limit).all()
+def get_users(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(None, description="Search by name, email, phone, biometric_id"),
+
+    # Filters
+    role_id: int = None,
+    department_id: int = None,
+    status: str = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(User)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                User.name.ilike(f"%{search}%"),
+                User.email.ilike(f"%{search}%"),
+                User.phone.ilike(f"%{search}%"),
+                User.biometric_id.ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if role_id:
+        query = query.filter(User.role_id == role_id)
+
+    if department_id:
+        query = query.filter(User.department_id == department_id)
+
+    if status:
+        query = query.filter(User.status == status)
+
+    total = query.count()
+
+    users = (
+        query
+        .order_by(User.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": users,
         "total": total,
