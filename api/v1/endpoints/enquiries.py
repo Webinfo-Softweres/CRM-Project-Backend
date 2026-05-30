@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_ ,String
+
 from typing import List
 from db.session import get_db
 from models.enquiry import Enquiry
@@ -26,11 +28,84 @@ def create_enquiry(enquiry: EnquiryCreate, current_user: User = Depends(get_curr
     return db_enquiry
 
 
+# @router.get("/")
+# def get_enquiries(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     total = db.query(Enquiry).count()
+#     enquiries = db.query(Enquiry).offset(skip).limit(limit).all()
+#     return {
+#         "items": enquiries,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
+
 @router.get("/")
-@router.get("")
-def get_enquiries(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    total = db.query(Enquiry).count()
-    enquiries = db.query(Enquiry).offset(skip).limit(limit).all()
+def get_enquiries(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(
+        None,
+        description="Search by source, service required, description, or status"
+    ),
+
+    # Filters
+    status: str = None,
+    source: str = None,
+    customer_id: int = None,
+    assigned_to: int = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Enquiry)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Enquiry.source.ilike(f"%{search}%"),
+                Enquiry.service_required.ilike(f"%{search}%"),
+                Enquiry.description.ilike(f"%{search}%"),
+                Enquiry.status.cast(String).ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if status:
+        query = query.filter(
+            Enquiry.status.cast(String).ilike(f"%{status}%")
+        )
+
+    if source:
+        query = query.filter(
+            Enquiry.source.ilike(f"%{source}%")
+        )
+
+    if customer_id:
+        query = query.filter(
+            Enquiry.customer_id == customer_id
+        )
+
+    if assigned_to:
+        query = query.filter(
+            Enquiry.assigned_to == assigned_to
+        )
+
+    total = query.count()
+
+    enquiries = (
+        query
+        .order_by(Enquiry.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": enquiries,
         "total": total,

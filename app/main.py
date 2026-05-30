@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.v1.api import api_router
 from db.session import engine
 from models import Base
-
+from init_db import init_db
 app = FastAPI(
     title="CRM Workflow Management API",
     version="1.0.0",
@@ -49,7 +49,7 @@ async def biometric_listener(request: Request):
 
 @app.on_event("startup")
 async def startup_event():
-    pass
+    init_db()
 
 
 @app.get("/")
