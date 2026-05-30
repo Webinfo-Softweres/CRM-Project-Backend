@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, String
+
 from typing import List
 from db.session import get_db
 from models.task import Task, TaskLog
@@ -46,11 +48,91 @@ def create_task(task: TaskCreate, current_user: User = Depends(get_current_activ
     return db_task
 
 
+# @router.get("/")
+# def get_tasks(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     total = db.query(Task).count()
+#     tasks = db.query(Task).offset(skip).limit(limit).all()
+#     return {
+#         "items": tasks,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
+
+
 @router.get("/")
-@router.get("")
-def get_tasks(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    total = db.query(Task).count()
-    tasks = db.query(Task).offset(skip).limit(limit).all()
+def get_tasks(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(
+        None,
+        description="Search by title, description, status, or priority"
+    ),
+
+    # Filters
+    status: str = None,
+    priority: str = None,
+    project_id: int = None,
+    department_id: int = None,
+    assigned_to: int = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Task)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Task.title.ilike(f"%{search}%"),
+                Task.description.ilike(f"%{search}%"),
+                Task.status.cast(String).ilike(f"%{search}%"),
+                Task.priority.cast(String).ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if status:
+        query = query.filter(
+            Task.status.cast(String).ilike(f"%{status}%")
+        )
+
+    if priority:
+        query = query.filter(
+            Task.priority.cast(String).ilike(f"%{priority}%")
+        )
+
+    if project_id:
+        query = query.filter(
+            Task.project_id == project_id
+        )
+
+    if department_id:
+        query = query.filter(
+            Task.department_id == department_id
+        )
+
+    if assigned_to:
+        query = query.filter(
+            Task.assigned_to == assigned_to
+        )
+
+    total = query.count()
+
+    tasks = (
+        query
+        .order_by(Task.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": tasks,
         "total": total,
