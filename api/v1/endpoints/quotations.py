@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, String
+
 from typing import List
 from datetime import datetime
 from db.session import get_db
@@ -32,10 +34,83 @@ def create_quotation(quotation: QuotationCreate, current_user: User = Depends(ge
     return db_quotation
 
 
+# @router.get("/")
+# def get_quotations(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     total = db.query(Quotation).count()
+#     quotations = db.query(Quotation).offset(skip).limit(limit).all()
+#     return {
+#         "items": quotations,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
 @router.get("/")
-def get_quotations(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    total = db.query(Quotation).count()
-    quotations = db.query(Quotation).offset(skip).limit(limit).all()
+def get_quotations(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(
+        None,
+        description="Search by title, description, status, or amount"
+    ),
+
+    # Filters
+    status: str = None,
+    # customer_id: int = None,
+    enquiry_id: int = None,
+    created_by: int = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Quotation)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                # Quotation.title.ilike(f"%{search}%"),
+                Quotation.description.ilike(f"%{search}%"),
+                Quotation.status.cast(String).ilike(f"%{search}%"),
+                Quotation.amount.cast(String).ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if status:
+        query = query.filter(
+            Quotation.status.cast(String).ilike(f"%{status}%")
+        )
+
+    # if customer_id:
+    #     query = query.filter(
+    #         Quotation.customer_id == customer_id
+    #     )
+
+    if enquiry_id:
+        query = query.filter(
+            Quotation.enquiry_id == enquiry_id
+        )
+
+    if created_by:
+        query = query.filter(
+            Quotation.created_by == created_by
+        )
+
+    total = query.count()
+
+    quotations = (
+        query
+        .order_by(Quotation.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": quotations,
         "total": total,
@@ -43,7 +118,6 @@ def get_quotations(skip: int = 0, limit: int = 100, current_user: User = Depends
         "limit": limit,
         "pages": (total + limit - 1) // limit if limit else 1
     }
-
 
 @router.get("/{quotation_id}", response_model=QuotationSchema)
 def get_quotation(quotation_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):

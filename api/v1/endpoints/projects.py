@@ -1,5 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, String
+
 from typing import List
 from db.session import get_db
 from models.project import Project
@@ -41,11 +43,77 @@ def create_project(project: ProjectCreate, current_user: User = Depends(is_manag
     return db_project
 
 
+# @router.get("/")
+# def get_projects(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     total = db.query(Project).count()
+#     projects = db.query(Project).offset(skip).limit(limit).all()
+#     return {
+#         "items": projects,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
+
 @router.get("/")
-@router.get("")
-def get_projects(skip: int = 0, limit: int = 100, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    total = db.query(Project).count()
-    projects = db.query(Project).offset(skip).limit(limit).all()
+def get_projects(
+    skip: int = 0,
+    limit: int = 100,
+
+    # Search
+    search: str = Query(
+        None,
+        description="Search by project name, description, status, or client"
+    ),
+
+    # Filters
+    status: str = None,
+    customer_id: int = None,
+    assigned_to: int = None,
+
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Project)
+
+    # Search
+    if search:
+        query = query.filter(
+            or_(
+                Project.project_name.ilike(f"%{search}%"),
+                # Project.description.ilike(f"%{search}%"),
+                Project.status.cast(String).ilike(f"%{search}%")
+            )
+        )
+
+    # Filters
+    if status:
+        query = query.filter(
+            Project.status.cast(String).ilike(f"%{status}%")
+        )
+
+    if customer_id:
+        query = query.filter(
+            Project.customer_id == customer_id
+        )
+
+    if assigned_to:
+        query = query.filter(
+            Project.assigned_to == assigned_to
+        )
+
+    total = query.count()
+
+    projects = (
+        query
+        .order_by(Project.id.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
     return {
         "items": projects,
         "total": total,
