@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status,Request
 from sqlalchemy.orm import Session
 from db.session import get_db
 from models.user import User, Role
@@ -6,12 +6,13 @@ from schemas.user import Token, UserCreate, LoginRequest
 from core.security import verify_password, get_password_hash, create_access_token, get_current_active_user
 from datetime import timedelta
 from core.config import settings
+from utils.activity_log import create_activity_log
 
 router = APIRouter()
 
 
 @router.post("/login")
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, request: Request,db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == credentials.email).first()
     if not user or not verify_password(credentials.password, user.password):
         raise HTTPException(
@@ -28,6 +29,15 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     access_token = create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
+
+    create_activity_log(
+            db=db,
+            user_id=user.id,
+            method="POST",
+            action="Login",
+            endpoint="/api/v1/auth/login",
+            ip_address=request.client.host
+        )
     return {
         "token": access_token,
         "token_type": "bearer",
