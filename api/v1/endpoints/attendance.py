@@ -299,197 +299,410 @@ def get_month_attendance(
         db.close()  
 
 
-# @router.delete("/clear-device")
-# def clear_device_attendance():
 
-#     conn = None
 
-#     try:
 
-#         print("CONNECTING DEVICE")
 
-#         zk = ZK(
-#             DEVICE_IP,
-#             port=DEVICE_PORT,
-#             timeout=5,
-#             password=0,
-#             force_udp=False,
-#             ommit_ping=True,
-#         )
 
-#         conn = zk.connect()
+@router.get("/daily-summary")
+def get_daily_attendance(
+    attendance_date: date,
+    employee_id: str = None,
+):
 
-#         print("DEVICE CONNECTED")
+    db: Session = SessionLocal()
 
-#         conn.disable_device()
+    try:
 
-#         # CLEAR ATTENDANCE LOGS FROM DEVICE
+        start_datetime = datetime.combine(
+            attendance_date,
+            datetime.min.time()
+        )
 
-#         conn.clear_attendance()
+        end_datetime = datetime.combine(
+            attendance_date,
+            datetime.max.time()
+        )
 
-#         conn.enable_device()
+        query = db.query(Attendance).filter(
 
-#         print("DEVICE ATTENDANCE CLEARED")
+            Attendance.punch_time >= start_datetime,
 
-#         return {
+            Attendance.punch_time <= end_datetime
+        )
 
-#             "status": "success",
+        # FILTER USER IF PROVIDED
 
-#             "message": "All attendance logs cleared from punching machine",
-#         }
+        if employee_id:
 
-#     except Exception as e:
+            query = query.filter(
+                Attendance.employee_id == employee_id
+            )
 
-#         print("ERROR:", str(e))
+        records = query.order_by(
+            Attendance.employee_id.asc(),
+            Attendance.punch_time.asc()
+        ).all()
 
-#         return {
+        if not records:
 
-#             "status": "error",
+            return {
 
-#             "message": str(e),
-#         }
+                "status": "success",
 
-#     finally:
+                "date": str(attendance_date),
 
-#         if conn:
+                "attendance": []
+            }
 
-#             try:
-#                 conn.enable_device()
-#             except:
-#                 pass
+        grouped_data = defaultdict(list)
 
-#             try:
-#                 conn.disconnect()
-#             except:
-#                 pass
+        for record in records:
 
+            grouped_data[
+                record.employee_id
+            ].append(record)
 
+        final_response = []
 
-# @router.delete("/clear-device-users")
-# def clear_device_users():
+        for emp_id, emp_records in grouped_data.items():
 
-#     conn = None
+            punches = [
 
-#     try:
+                r.punch_time
 
-#         print("CONNECTING DEVICE")
+                for r in emp_records
+            ]
 
-#         zk = ZK(
-#             DEVICE_IP,
-#             port=DEVICE_PORT,
-#             timeout=5,
-#             password=0,
-#             force_udp=False,
-#             ommit_ping=True,
-#         )
+            sessions = []
 
-#         conn = zk.connect()
+            break_sessions = []
 
-#         print("DEVICE CONNECTED")
+            total_work_seconds = 0
 
-#         conn.disable_device()
+            total_break_seconds = 0
 
-#         users = list(conn.get_users())
+            for i in range(0, len(punches) - 1, 2):
 
-#         deleted_users = []
+                punch_in = punches[i]
 
-#         for user in users:
+                punch_out = punches[i + 1]
 
-#             # SKIP SUPER ADMIN
+                duration = (
+                    punch_out - punch_in
+                ).total_seconds()
 
-#             if user.privilege == 14:
-#                 continue
+                total_work_seconds += duration
 
-#             try:
+                sessions.append({
 
-#                 conn.delete_user(uid=user.uid)
+                    "punch_in": punch_in.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
 
-#                 deleted_users.append({
+                    "punch_out": punch_out.strftime(
+                        "%Y-%m-%d %H:%M:%S"
+                    ),
 
-#                     "uid": user.uid,
+                    "work_hours": round(
+                        duration / 3600,
+                        2
+                    )
+                })
 
-#                     "user_id": user.user_id,
+                # BREAK
 
-#                     "name": user.name,
-#                 })
+                if i + 2 < len(punches):
 
-#                 print(f"DELETED USER: {user.name}")
+                    break_start = punches[i + 1]
 
-#             except Exception as e:
+                    break_end = punches[i + 2]
 
-#                 print(f"FAILED TO DELETE {user.name}: {e}")
+                    break_duration = (
+                        break_end - break_start
+                    ).total_seconds()
 
-#         conn.enable_device()
+                    total_break_seconds += break_duration
 
-#         return {
+                    break_sessions.append({
 
-#             "status": "success",
+                        "break_start": break_start.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
 
-#             "message": "All normal users deleted from device",
+                        "break_end": break_end.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
 
-#             "deleted_count": len(deleted_users),
+                        "break_hours": round(
+                            break_duration / 3600,
+                            2
+                        )
+                    })
 
-#             "deleted_users": deleted_users,
-#         }
+            final_response.append({
 
-#     except Exception as e:
+                "employee_id": emp_id,
 
-#         print("ERROR:", str(e))
+                "employee_name": emp_records[0].employee_name,
 
-#         return {
+                "date": str(attendance_date),
 
-#             "status": "error",
+                "present": True,
 
-#             "message": str(e),
-#         }
+                "total_work_hours": round(
+                    total_work_seconds / 3600,
+                    2
+                ),
 
-#     finally:
+                "total_break_hours": round(
+                    total_break_seconds / 3600,
+                    2
+                ),
 
-#         if conn:
+                "sessions": sessions,
 
-#             try:
-#                 conn.enable_device()
-#             except:
-#                 pass
+                "break_sessions": break_sessions
+            })
 
-#             try:
-#                 conn.disconnect()
-#             except:
-#                 pass
+        return {
 
+            "status": "success",
 
+            "date": str(attendance_date),
 
-# @router.delete("/clear")
-# def clear_attendance_data():
+            "total_users": len(final_response),
 
-#     db: Session = SessionLocal()
+            "attendance": final_response
+        }
 
-#     try:
+    except Exception as e:
 
-#         deleted_count = db.query(Attendance).delete()
+        return {
 
-#         db.commit()
+            "status": "error",
 
-#         return {
+            "message": str(e)
+        }
 
-#             "status": "success",
+    finally:
 
-#             "message": "All attendance records deleted successfully",
+        db.close()
 
-#             "total_deleted": deleted_count,
-#         }
 
-#     except Exception as e:
+@router.get("/monthly-summary")
+def get_monthly_attendance(
+    year: int,
+    month: int,
+    employee_id: str = None,
+):
 
-#         db.rollback()
+    db: Session = SessionLocal()
 
-#         return {
+    try:
 
-#             "status": "error",
+        query = db.query(Attendance).filter(
 
-#             "message": str(e),
-#         }
+            extract(
+                "year",
+                Attendance.punch_time
+            ) == year,
 
-#     finally:
+            extract(
+                "month",
+                Attendance.punch_time
+            ) == month
+        )
 
-#         db.close()
+        # FILTER USER IF PROVIDED
+
+        if employee_id:
+
+            query = query.filter(
+                Attendance.employee_id == employee_id
+            )
+
+        records = query.order_by(
+            Attendance.employee_id.asc(),
+            Attendance.punch_time.asc()
+        ).all()
+
+        if not records:
+
+            return {
+
+                "status": "success",
+
+                "attendance": []
+            }
+
+        grouped_users = defaultdict(list)
+
+        for record in records:
+
+            grouped_users[
+                record.employee_id
+            ].append(record)
+
+        final_response = []
+
+        for emp_id, emp_records in grouped_users.items():
+
+            grouped_days = defaultdict(list)
+
+            for record in emp_records:
+
+                grouped_days[
+                    record.punch_time.date()
+                ].append(record.punch_time)
+
+            present_days = len(grouped_days)
+
+            total_work_seconds = 0
+
+            daily_summary = []
+
+            for day, punches in grouped_days.items():
+
+                punches.sort()
+
+                sessions = []
+
+                break_sessions = []
+
+                day_work_seconds = 0
+
+                day_break_seconds = 0
+
+                for i in range(0, len(punches) - 1, 2):
+
+                    punch_in = punches[i]
+
+                    punch_out = punches[i + 1]
+
+                    duration = (
+                        punch_out - punch_in
+                    ).total_seconds()
+
+                    day_work_seconds += duration
+
+                    sessions.append({
+
+                        "punch_in": punch_in.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+
+                        "punch_out": punch_out.strftime(
+                            "%Y-%m-%d %H:%M:%S"
+                        ),
+
+                        "work_hours": round(
+                            duration / 3600,
+                            2
+                        )
+                    })
+
+                    if i + 2 < len(punches):
+
+                        break_start = punches[i + 1]
+
+                        break_end = punches[i + 2]
+
+                        break_duration = (
+                            break_end - break_start
+                        ).total_seconds()
+
+                        day_break_seconds += break_duration
+
+                        break_sessions.append({
+
+                            "break_start": break_start.strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            ),
+
+                            "break_end": break_end.strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            ),
+
+                            "break_hours": round(
+                                break_duration / 3600,
+                                2
+                            )
+                        })
+
+                total_work_seconds += day_work_seconds
+
+                daily_summary.append({
+
+                    "date": str(day),
+
+                    "present": True,
+
+                    "total_work_hours": round(
+                        day_work_seconds / 3600,
+                        2
+                    ),
+
+                    "total_break_hours": round(
+                        day_break_seconds / 3600,
+                        2
+                    ),
+
+                    "sessions": sessions,
+
+                    "break_sessions": break_sessions
+                })
+
+            total_days = calendar.monthrange(
+                year,
+                month
+            )[1]
+
+            absent_days = (
+                total_days - present_days
+            )
+
+            final_response.append({
+
+                "employee_id": emp_id,
+
+                "employee_name": emp_records[0].employee_name,
+
+                "year": year,
+
+                "month": month,
+
+                "present_days": present_days,
+
+                "absent_days": absent_days,
+
+                "total_work_hours": round(
+                    total_work_seconds / 3600,
+                    2
+                ),
+
+                "daily_summary": daily_summary
+            })
+
+        return {
+
+            "status": "success",
+
+            "total_users": len(final_response),
+
+            "attendance": final_response
+        }
+
+    except Exception as e:
+
+        return {
+
+            "status": "error",
+
+            "message": str(e)
+        }
+
+    finally:
+
+        db.close()
+
