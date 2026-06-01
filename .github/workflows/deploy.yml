@@ -27,7 +27,11 @@ jobs:
 
             cd /home/ubuntu/backup/CRM-Project-Backend
 
-            git pull origin main
+            git fetch origin main 
+            
+            git reset --hard origin/main 
+            
+            git clean -fd
 
             source .venv/bin/activate
 
