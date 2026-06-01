@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from api.v1.endpoints import auth, users, roles, departments, customers, enquiries, quotations, projects, tasks, reports, feedback, status_logs, notifications,attendance,activity_log
+from api.v1.endpoints import auth, users, roles, departments, customers, enquiries, quotations, projects, tasks, reports, feedback, status_logs, notifications,attendance,activity_log,count
 
 
 api_router = APIRouter()
@@ -19,6 +19,8 @@ api_router.include_router(status_logs.router, prefix="/status-logs", tags=["stat
 api_router.include_router(notifications.router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(attendance.router, prefix="/attendance", tags=["attendance"])
 api_router.include_router(activity_log.router, prefix="/activity_log", tags=["activity_log"])
+api_router.include_router(count.router, prefix="/count", tags=["count"])
+
 
 
 
