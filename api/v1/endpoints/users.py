@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status,Query
+from fastapi import APIRouter, Depends, HTTPException, status,Query,Request
 from sqlalchemy.orm import Session
 from typing import List
 from db.session import get_db
@@ -7,6 +7,8 @@ from schemas.user import User as UserSchema, UserCreate, UserUpdate,UserResponse
 from core.security import get_password_hash, get_current_active_user, is_admin
 from zk import ZK
 from sqlalchemy import or_
+from utils.activity_log import create_activity_log
+
 
 
 router = APIRouter()
@@ -39,7 +41,7 @@ DEVICE_PORT = 4370
 
 
 @router.post("/",response_model=UserSchema,status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate,db: Session = Depends(get_db)):
+def create_user(user: UserCreate,request: Request,db: Session = Depends(get_db)):
 
 
     existing_email = db.query(User).filter(
@@ -129,6 +131,16 @@ def create_user(user: UserCreate,db: Session = Depends(get_db)):
             str(e)
         )
 
+
+    create_activity_log(
+        db=db,
+        user_id=current_user.id,
+        method="POST",
+        action="Create User",
+        endpoint="/api/v1/users",
+        ip_address=request.client.host
+    )
+
     return db_user
 
 
@@ -145,13 +157,88 @@ def create_user(user: UserCreate,db: Session = Depends(get_db)):
 #     }
 
 
+# @router.get("/")
+# def get_users(
+#     skip: int = 0,
+#     limit: int = 100,
+
+#     # Search
+#     search: str = Query(None, description="Search by name, email, phone, biometric_id"),
+
+#     # Filters
+#     role_id: int = None,
+#     department_id: int = None,
+#     status: str = None,
+#     request: Request = None,
+
+#     current_user: User = Depends(get_current_active_user),
+#     db: Session = Depends(get_db)
+# ):
+#     query = db.query(User)
+
+#     # Search
+#     if search:
+#         query = query.filter(
+#             or_(
+#                 User.name.ilike(f"%{search}%"),
+#                 User.email.ilike(f"%{search}%"),
+#                 User.phone.ilike(f"%{search}%"),
+#                 User.biometric_id.ilike(f"%{search}%")
+#             )
+#         )
+
+#     # Filters
+#     if role_id:
+#         query = query.filter(User.role_id == role_id)
+
+#     if department_id:
+#         query = query.filter(User.department_id == department_id)
+
+#     if status:
+#         query = query.filter(User.status == status)
+
+#     total = query.count()
+
+#     users = (
+#         query
+#         .order_by(User.id.desc())
+#         .offset(skip)
+#         .limit(limit)
+#         .all()
+#     )
+
+
+#     create_activity_log(
+#         db=db,
+#         user_id=current_user.id,
+#         method="GET",
+#         action="View Users",
+#         endpoint="/api/v1/users",
+#         ip_address=request.client.host if request else None
+#     )
+
+
+#     return {
+#         "items": users,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
+
 @router.get("/")
 def get_users(
+    request: Request,
     skip: int = 0,
     limit: int = 100,
 
     # Search
-    search: str = Query(None, description="Search by name, email, phone, biometric_id"),
+    search: str = Query(
+        None,
+        description="Search by name, email, phone, biometric_id"
+    ),
 
     # Filters
     role_id: int = None,
@@ -194,25 +281,65 @@ def get_users(
         .all()
     )
 
+    # Get IP Address
+    ip_address = request.headers.get("x-forwarded-for")
+
+    if not ip_address:
+        ip_address = request.client.host
+
+    # # Activity Log
+    create_activity_log(
+        db=db,
+        user_id=current_user.id,
+        method="GET",
+        action="View Users",
+        endpoint="/api/v1/users",
+        ip_address=ip_address
+    )
+
     return {
-        "items": users,
+        "items": [
+            {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email,
+                "phone": user.phone,
+                "role_id": user.role_id,
+                "department_id": user.department_id,
+                "status": user.status,
+                "biometric_id": user.biometric_id,
+                "created_at": user.created_at,
+                "password": user.password
+            }
+            for user in users
+        ],
         "total": total,
         "page": (skip // limit) + 1 if limit else 1,
         "limit": limit,
         "pages": (total + limit - 1) // limit if limit else 1
     }
 
-
 @router.get("/{user_id}", response_model=UserSchema)
-def get_user(user_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+def get_user(user_id: int, current_user: User = Depends(get_current_active_user),request: Request=None, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+
+    create_activity_log(
+        db=db,
+        user_id=current_user.id,
+        method="GET",
+        action="View User",
+        endpoint=f"/api/v1/users/{user_id}",
+        ip_address=request.client.host
+    )
+
     return user
 
 
 @router.put("/{user_id}", response_model=UserSchema)
-def update_user(user_id: int, user: UserUpdate, current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
+def update_user(user_id: int, user: UserUpdate, request: Request,current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -226,14 +353,35 @@ def update_user(user_id: int, user: UserUpdate, current_user: User = Depends(is_
     
     db.commit()
     db.refresh(db_user)
+
+    create_activity_log(
+        db=db,
+        user_id=current_user.id,
+        method="PUT",
+        action="Update User",
+        endpoint=f"/api/v1/users/{user_id}",
+        ip_address=request.client.host
+    )
+
     return db_user
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_user(user_id: int, current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
+def delete_user(user_id: int, request: Request, current_user: User = Depends(is_admin), db: Session = Depends(get_db)):
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
     db.delete(db_user)
     db.commit()
+
+    create_activity_log(
+        db=db,
+        user_id=current_user.id,
+        method="DELETE",
+        action="Delete User",
+        endpoint=f"/api/v1/users/{user_id}",
+        ip_address=request.client.host
+    )
+
+    return None
