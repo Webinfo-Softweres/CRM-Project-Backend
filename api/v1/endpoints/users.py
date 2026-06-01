@@ -41,7 +41,7 @@ DEVICE_PORT = 4370
 
 
 @router.post("/",response_model=UserSchema,status_code=status.HTTP_201_CREATED)
-def create_user(user: UserCreate,request: Request,db: Session = Depends(get_db)):
+def create_user(user: UserCreate,request: Request,current_user: User = Depends(is_admin),db: Session = Depends(get_db)):
 
 
     existing_email = db.query(User).filter(
