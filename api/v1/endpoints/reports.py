@@ -8,6 +8,11 @@ from models.report import DailyReport
 from models.user import User
 from schemas.report import DailyReport as DailyReportSchema, DailyReportCreate, DailyReportUpdate
 from core.security import get_current_active_user
+from datetime import datetime
+import pytz
+
+IST = pytz.timezone("Asia/Kolkata")
+
 
 router = APIRouter()
 
@@ -23,7 +28,8 @@ def create_daily_report(report: DailyReportCreate, current_user: User = Depends(
         user_id=report.user_id,
         report_date=report.report_date,
         summary=report.summary,
-        total_hours=report.total_hours
+        total_hours=report.total_hours,
+        created_at=datetime.now(IST)
     )
     db.add(db_report)
     db.commit()
