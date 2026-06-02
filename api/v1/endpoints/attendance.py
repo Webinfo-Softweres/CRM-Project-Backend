@@ -6,6 +6,9 @@ from datetime import date,datetime
 
 from db.session import SessionLocal
 from models.attendance import Attendance
+from collections import defaultdict
+import calendar
+from datetime import time
 
 
 router = APIRouter()
@@ -304,6 +307,411 @@ def get_month_attendance(
 
 
 
+# @router.get("/daily-summary")
+# def get_daily_attendance(
+#     attendance_date: date,
+#     employee_id: str = None,
+# ):
+
+#     db: Session = SessionLocal()
+
+#     try:
+
+#         start_datetime = datetime.combine(
+#             attendance_date,
+#             datetime.min.time()
+#         )
+
+#         end_datetime = datetime.combine(
+#             attendance_date,
+#             datetime.max.time()
+#         )
+
+#         query = db.query(Attendance).filter(
+
+#             Attendance.punch_time >= start_datetime,
+
+#             Attendance.punch_time <= end_datetime
+#         )
+
+#         # FILTER USER IF PROVIDED
+
+#         if employee_id:
+
+#             query = query.filter(
+#                 Attendance.employee_id == employee_id
+#             )
+
+#         records = query.order_by(
+#             Attendance.employee_id.asc(),
+#             Attendance.punch_time.asc()
+#         ).all()
+
+#         if not records:
+
+#             return {
+
+#                 "status": "success",
+
+#                 "date": str(attendance_date),
+
+#                 "attendance": []
+#             }
+
+#         grouped_data = defaultdict(list)
+
+#         for record in records:
+
+#             grouped_data[
+#                 record.employee_id
+#             ].append(record)
+
+#         final_response = []
+
+#         for emp_id, emp_records in grouped_data.items():
+
+#             punches = [
+
+#                 r.punch_time
+
+#                 for r in emp_records
+#             ]
+
+#             sessions = []
+
+#             break_sessions = []
+
+#             total_work_seconds = 0
+
+#             total_break_seconds = 0
+
+#             for i in range(0, len(punches) - 1, 2):
+
+#                 punch_in = punches[i]
+
+#                 punch_out = punches[i + 1]
+
+#                 duration = (
+#                     punch_out - punch_in
+#                 ).total_seconds()
+
+#                 total_work_seconds += duration
+
+#                 sessions.append({
+
+#                     "punch_in": punch_in.strftime(
+#                         "%Y-%m-%d %H:%M:%S"
+#                     ),
+
+#                     "punch_out": punch_out.strftime(
+#                         "%Y-%m-%d %H:%M:%S"
+#                     ),
+
+#                     "work_hours": round(
+#                         duration / 3600,
+#                         2
+#                     )
+#                 })
+
+#                 # BREAK
+
+#                 if i + 2 < len(punches):
+
+#                     break_start = punches[i + 1]
+
+#                     break_end = punches[i + 2]
+
+#                     break_duration = (
+#                         break_end - break_start
+#                     ).total_seconds()
+
+#                     total_break_seconds += break_duration
+
+#                     break_sessions.append({
+
+#                         "break_start": break_start.strftime(
+#                             "%Y-%m-%d %H:%M:%S"
+#                         ),
+
+#                         "break_end": break_end.strftime(
+#                             "%Y-%m-%d %H:%M:%S"
+#                         ),
+
+#                         "break_hours": round(
+#                             break_duration / 3600,
+#                             2
+#                         )
+#                     })
+
+#             final_response.append({
+
+#                 "employee_id": emp_id,
+
+#                 "employee_name": emp_records[0].employee_name,
+
+#                 "date": str(attendance_date),
+
+#                 "present": True,
+
+#                 "total_work_hours": round(
+#                     total_work_seconds / 3600,
+#                     2
+#                 ),
+
+#                 "total_break_hours": round(
+#                     total_break_seconds / 3600,
+#                     2
+#                 ),
+
+#                 "sessions": sessions,
+
+#                 "break_sessions": break_sessions
+#             })
+
+#         return {
+
+#             "status": "success",
+
+#             "date": str(attendance_date),
+
+#             "total_users": len(final_response),
+
+#             "attendance": final_response
+#         }
+
+#     except Exception as e:
+
+#         return {
+
+#             "status": "error",
+
+#             "message": str(e)
+#         }
+
+#     finally:
+
+#         db.close()
+
+
+# @router.get("/monthly-summary")
+# def get_monthly_attendance(
+#     year: int,
+#     month: int,
+#     employee_id: str = None,
+# ):
+
+#     db: Session = SessionLocal()
+
+#     try:
+
+#         query = db.query(Attendance).filter(
+
+#             extract(
+#                 "year",
+#                 Attendance.punch_time
+#             ) == year,
+
+#             extract(
+#                 "month",
+#                 Attendance.punch_time
+#             ) == month
+#         )
+
+#         # FILTER USER IF PROVIDED
+
+#         if employee_id:
+
+#             query = query.filter(
+#                 Attendance.employee_id == employee_id
+#             )
+
+#         records = query.order_by(
+#             Attendance.employee_id.asc(),
+#             Attendance.punch_time.asc()
+#         ).all()
+
+#         if not records:
+
+#             return {
+
+#                 "status": "success",
+
+#                 "attendance": []
+#             }
+
+#         grouped_users = defaultdict(list)
+
+#         for record in records:
+
+#             grouped_users[
+#                 record.employee_id
+#             ].append(record)
+
+#         final_response = []
+
+#         for emp_id, emp_records in grouped_users.items():
+
+#             grouped_days = defaultdict(list)
+
+#             for record in emp_records:
+
+#                 grouped_days[
+#                     record.punch_time.date()
+#                 ].append(record.punch_time)
+
+#             present_days = len(grouped_days)
+
+#             total_work_seconds = 0
+
+#             daily_summary = []
+
+#             for day, punches in grouped_days.items():
+
+#                 punches.sort()
+
+#                 sessions = []
+
+#                 break_sessions = []
+
+#                 day_work_seconds = 0
+
+#                 day_break_seconds = 0
+
+#                 for i in range(0, len(punches) - 1, 2):
+
+#                     punch_in = punches[i]
+
+#                     punch_out = punches[i + 1]
+
+#                     duration = (
+#                         punch_out - punch_in
+#                     ).total_seconds()
+
+#                     day_work_seconds += duration
+
+#                     sessions.append({
+
+#                         "punch_in": punch_in.strftime(
+#                             "%Y-%m-%d %H:%M:%S"
+#                         ),
+
+#                         "punch_out": punch_out.strftime(
+#                             "%Y-%m-%d %H:%M:%S"
+#                         ),
+
+#                         "work_hours": round(
+#                             duration / 3600,
+#                             2
+#                         )
+#                     })
+
+#                     if i + 2 < len(punches):
+
+#                         break_start = punches[i + 1]
+
+#                         break_end = punches[i + 2]
+
+#                         break_duration = (
+#                             break_end - break_start
+#                         ).total_seconds()
+
+#                         day_break_seconds += break_duration
+
+#                         break_sessions.append({
+
+#                             "break_start": break_start.strftime(
+#                                 "%Y-%m-%d %H:%M:%S"
+#                             ),
+
+#                             "break_end": break_end.strftime(
+#                                 "%Y-%m-%d %H:%M:%S"
+#                             ),
+
+#                             "break_hours": round(
+#                                 break_duration / 3600,
+#                                 2
+#                             )
+#                         })
+
+#                 total_work_seconds += day_work_seconds
+
+#                 daily_summary.append({
+
+#                     "date": str(day),
+
+#                     "present": True,
+
+#                     "total_work_hours": round(
+#                         day_work_seconds / 3600,
+#                         2
+#                     ),
+
+#                     "total_break_hours": round(
+#                         day_break_seconds / 3600,
+#                         2
+#                     ),
+
+#                     "sessions": sessions,
+
+#                     "break_sessions": break_sessions
+#                 })
+
+#             total_days = calendar.monthrange(
+#                 year,
+#                 month
+#             )[1]
+
+#             absent_days = (
+#                 total_days - present_days
+#             )
+
+#             final_response.append({
+
+#                 "employee_id": emp_id,
+
+#                 "employee_name": emp_records[0].employee_name,
+
+#                 "year": year,
+
+#                 "month": month,
+
+#                 "present_days": present_days,
+
+#                 "absent_days": absent_days,
+
+#                 "total_work_hours": round(
+#                     total_work_seconds / 3600,
+#                     2
+#                 ),
+
+#                 "daily_summary": daily_summary
+#             })
+
+#         return {
+
+#             "status": "success",
+
+#             "total_users": len(final_response),
+
+#             "attendance": final_response
+#         }
+
+#     except Exception as e:
+
+#         return {
+
+#             "status": "error",
+
+#             "message": str(e)
+#         }
+
+#     finally:
+
+#         db.close()
+
+
+
+
 @router.get("/daily-summary")
 def get_daily_attendance(
     attendance_date: date,
@@ -313,6 +721,10 @@ def get_daily_attendance(
     db: Session = SessionLocal()
 
     try:
+
+        office_start_time = time(9, 0)
+
+        half_day_limit = time(9, 30)
 
         start_datetime = datetime.combine(
             attendance_date,
@@ -330,8 +742,6 @@ def get_daily_attendance(
 
             Attendance.punch_time <= end_datetime
         )
-
-        # FILTER USER IF PROVIDED
 
         if employee_id:
 
@@ -374,6 +784,18 @@ def get_daily_attendance(
                 for r in emp_records
             ]
 
+            punches.sort()
+
+            first_punch = punches[0].time()
+
+            if first_punch <= office_start_time:
+
+                attendance_status = "Full Day"
+
+            else:
+
+                attendance_status = "Half Day"
+
             sessions = []
 
             break_sessions = []
@@ -410,8 +832,6 @@ def get_daily_attendance(
                     )
                 })
 
-                # BREAK
-
                 if i + 2 < len(punches):
 
                     break_start = punches[i + 1]
@@ -447,6 +867,8 @@ def get_daily_attendance(
                 "employee_name": emp_records[0].employee_name,
 
                 "date": str(attendance_date),
+
+                "attendance_status": attendance_status,
 
                 "present": True,
 
@@ -490,6 +912,7 @@ def get_daily_attendance(
         db.close()
 
 
+
 @router.get("/monthly-summary")
 def get_monthly_attendance(
     year: int,
@@ -500,6 +923,8 @@ def get_monthly_attendance(
     db: Session = SessionLocal()
 
     try:
+
+        office_start_time = time(9, 0)
 
         query = db.query(Attendance).filter(
 
@@ -513,8 +938,6 @@ def get_monthly_attendance(
                 Attendance.punch_time
             ) == month
         )
-
-        # FILTER USER IF PROVIDED
 
         if employee_id:
 
@@ -560,11 +983,29 @@ def get_monthly_attendance(
 
             total_work_seconds = 0
 
+            full_day_count = 0
+
+            half_day_count = 0
+
             daily_summary = []
 
             for day, punches in grouped_days.items():
 
                 punches.sort()
+
+                first_punch = punches[0].time()
+
+                if first_punch <= office_start_time:
+
+                    attendance_status = "Full Day"
+
+                    full_day_count += 1
+
+                else:
+
+                    attendance_status = "Half Day"
+
+                    half_day_count += 1
 
                 sessions = []
 
@@ -636,6 +1077,8 @@ def get_monthly_attendance(
 
                     "date": str(day),
 
+                    "attendance_status": attendance_status,
+
                     "present": True,
 
                     "total_work_hours": round(
@@ -674,6 +1117,10 @@ def get_monthly_attendance(
 
                 "present_days": present_days,
 
+                "full_days": full_day_count,
+
+                "half_days": half_day_count,
+
                 "absent_days": absent_days,
 
                 "total_work_hours": round(
@@ -705,4 +1152,3 @@ def get_monthly_attendance(
     finally:
 
         db.close()
-
