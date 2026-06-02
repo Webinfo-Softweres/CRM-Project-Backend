@@ -10,6 +10,8 @@ from schemas.report import DailyReport as DailyReportSchema, DailyReportCreate, 
 from core.security import get_current_active_user
 from datetime import datetime
 import pytz
+from datetime import timezone
+from zoneinfo import ZoneInfo
 
 IST = pytz.timezone("Asia/Kolkata")
 
@@ -106,6 +108,12 @@ def get_daily_reports(
         .limit(limit)
         .all()
     )
+    for report in reports:
+        if report.created_at:
+            report.created_at = report.created_at.replace(
+                tzinfo=timezone.utc
+            ).astimezone(IST)
+
 
     return {
         "items": reports,
