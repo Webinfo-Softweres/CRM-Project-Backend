@@ -52,6 +52,78 @@ def create_daily_report(report: DailyReportCreate, current_user: User = Depends(
 #     }
 
 
+# @router.get("/")
+# def get_daily_reports(
+#     skip: int = 0,
+#     limit: int = 100,
+
+#     # Search
+#     search: str = Query(
+#         None,
+#         description="Search by summary, total hours, or report date"
+#     ),
+
+#     # Filters
+#     user_id: int = None,
+#     report_date: str = None,
+#     total_hours: int = None,
+
+#     current_user: User = Depends(get_current_active_user),
+#     db: Session = Depends(get_db)
+# ):
+#     query = db.query(DailyReport)
+
+#     # Search
+#     if search:
+#         query = query.filter(
+#             or_(
+#                 DailyReport.summary.ilike(f"%{search}%"),
+#                 DailyReport.report_date.cast(String).ilike(f"%{search}%"),
+#                 DailyReport.total_hours.cast(String).ilike(f"%{search}%")
+#             )
+#         )
+
+#     # Filters
+#     if user_id:
+#         query = query.filter(
+#             DailyReport.user_id == user_id
+#         )
+
+#     if report_date:
+#         query = query.filter(
+#             DailyReport.report_date.cast(String).ilike(f"%{report_date}%")
+#         )
+
+#     if total_hours:
+#         query = query.filter(
+#             DailyReport.total_hours == total_hours
+#         )
+
+#     total = query.count()
+
+#     reports = (
+#         query
+#         .order_by(DailyReport.id.desc())
+#         .offset(skip)
+#         .limit(limit)
+#         .all()
+#     )
+#     for report in reports:
+#         if report.created_at:
+#             report.created_at = report.created_at.replace(
+#                 tzinfo=timezone.utc
+#             ).astimezone(IST)
+
+
+#     return {
+#         "items": reports,
+#         "total": total,
+#         "page": (skip // limit) + 1 if limit else 1,
+#         "limit": limit,
+#         "pages": (total + limit - 1) // limit if limit else 1
+#     }
+
+
 @router.get("/")
 def get_daily_reports(
     skip: int = 0,
@@ -72,6 +144,13 @@ def get_daily_reports(
     db: Session = Depends(get_db)
 ):
     query = db.query(DailyReport)
+
+    # Admin can see all
+    # User can see only their reports
+    if current_user.role.role_name.lower() != "admin":
+        query = query.filter(
+            DailyReport.user_id == current_user.id
+        )
 
     # Search
     if search:
@@ -108,12 +187,13 @@ def get_daily_reports(
         .limit(limit)
         .all()
     )
+
+    # Convert UTC to IST
     for report in reports:
         if report.created_at:
             report.created_at = report.created_at.replace(
                 tzinfo=timezone.utc
             ).astimezone(IST)
-
 
     return {
         "items": reports,
@@ -122,7 +202,6 @@ def get_daily_reports(
         "limit": limit,
         "pages": (total + limit - 1) // limit if limit else 1
     }
-
 
 @router.get("/user/{user_id}", response_model=List[DailyReportSchema])
 def get_reports_by_user(user_id: int, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
