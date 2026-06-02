@@ -9,43 +9,147 @@ from models.project import Project
 from models.user import User, Department
 from schemas.task import Task as TaskSchema, TaskCreate, TaskUpdate, TaskAssign, TaskStatusUpdate, TaskLog as TaskLogSchema, TaskLogCreate
 from core.security import get_current_active_user, is_manager_or_admin, is_admin
+from utils.notification import create_notification
 
 router = APIRouter()
 
 
+# @router.post("/", response_model=TaskSchema, status_code=status.HTTP_201_CREATED)
+# def create_task(task: TaskCreate, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
+#     # Check if project exists
+#     project = db.query(Project).filter(Project.id == task.project_id).first()
+#     if not project:
+#         raise HTTPException(status_code=404, detail="Project not found")
+    
+#     # Check if assigned user exists
+#     if task.assigned_to:
+#         user = db.query(User).filter(User.id == task.assigned_to).first()
+#         if not user:
+#             raise HTTPException(status_code=404, detail="Assigned user not found")
+    
+#     # Check if department exists
+#     if task.department_id:
+#         department = db.query(Department).filter(Department.id == task.department_id).first()
+#         if not department:
+#             raise HTTPException(status_code=404, detail="Department not found")
+    
+#     db_task = Task(
+#         project_id=task.project_id,
+#         title=task.title,
+#         description=task.description,
+#         department_id=task.department_id,
+#         assigned_to=task.assigned_to,
+#         estimated_hours=task.estimated_hours,
+#         status=task.status,
+#         priority=task.priority
+#     )
+#     db.add(db_task)
+#     db.commit()
+#     db.refresh(db_task)
+#     return db_task
+
+
+
+
 @router.post("/", response_model=TaskSchema, status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-    # Check if project exists
-    project = db.query(Project).filter(Project.id == task.project_id).first()
+async def create_task(
+    task: TaskCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+
+    # CHECK PROJECT
+
+    project = db.query(Project).filter(
+        Project.id == task.project_id
+    ).first()
+
     if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    
-    # Check if assigned user exists
+
+        raise HTTPException(
+            status_code=404,
+            detail="Project not found"
+        )
+
+    # CHECK ASSIGNED USER
+
+    assigned_user = None
+
     if task.assigned_to:
-        user = db.query(User).filter(User.id == task.assigned_to).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="Assigned user not found")
-    
-    # Check if department exists
+
+        assigned_user = db.query(User).filter(
+            User.id == task.assigned_to
+        ).first()
+
+        if not assigned_user:
+
+            raise HTTPException(
+                status_code=404,
+                detail="Assigned user not found"
+            )
+
+    # CHECK DEPARTMENT
+
     if task.department_id:
-        department = db.query(Department).filter(Department.id == task.department_id).first()
+
+        department = db.query(Department).filter(
+            Department.id == task.department_id
+        ).first()
+
         if not department:
-            raise HTTPException(status_code=404, detail="Department not found")
-    
+
+            raise HTTPException(
+                status_code=404,
+                detail="Department not found"
+            )
+
+    # CREATE TASK
+
     db_task = Task(
+
         project_id=task.project_id,
+
         title=task.title,
+
         description=task.description,
+
         department_id=task.department_id,
+
         assigned_to=task.assigned_to,
+
         estimated_hours=task.estimated_hours,
+
         status=task.status,
+
         priority=task.priority
     )
+
     db.add(db_task)
+
     db.commit()
+
     db.refresh(db_task)
+
+    # AUTOMATIC NOTIFICATION
+
+    if assigned_user:
+
+        create_notification(
+
+            db=db,
+
+            user_id=assigned_user.id,
+
+            message=f"New task assigned: {db_task.title}"
+        )
+
     return db_task
+
+
+
+
+
+
 
 
 # @router.get("/")

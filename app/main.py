@@ -1,3 +1,9 @@
+import os
+
+os.environ["TZ"] = "Asia/Kolkata"
+
+
+
 from fastapi import FastAPI,Request
 from fastapi.middleware.cors import CORSMiddleware
 from api.v1.api import api_router
